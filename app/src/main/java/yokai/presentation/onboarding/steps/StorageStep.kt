@@ -1,6 +1,9 @@
 package yokai.presentation.onboarding.steps
 
-import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +30,6 @@ import kotlinx.coroutines.flow.collectLatest
 import uy.kohesive.injekt.injectLazy
 import yokai.domain.storage.StoragePreferences
 import yokai.presentation.component.preference.storageLocationText
-import yokai.presentation.settings.screen.data.storageLocationPicker
 import yokai.presentation.theme.Size
 
 internal class StorageStep : OnboardingStep {
@@ -44,29 +46,38 @@ internal class StorageStep : OnboardingStep {
         val context = LocalContext.current
         val handler = LocalUriHandler.current
 
-        val pickStorageLocation = storageLocationPicker(storagePref.baseStorageDirectory())
+        // SAF launcher using OpenDocumentTree.
+        val launcher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocumentTree()
+        ) { uri: Uri? ->
+            if (uri != null) {
+                // Persist permissions for the selected URI.
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                // Update storage preference with the new URI.
+                storagePref.baseStorageDirectory().set(uri.toString())
+            } else {
+                context.toast(MR.strings.file_picker_error)
+            }
+        }
 
         Column(
             modifier = Modifier.padding(Size.medium).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(Size.small),
+            verticalArrangement = Arrangement.spacedBy(Size.small)
         ) {
             Text(
                 stringResource(
                     MR.strings.onboarding_storage_info,
                     stringResource(MR.strings.app_name),
-                    storageLocationText(storagePref.baseStorageDirectory()),
-                ),
+                    storageLocationText(storagePref.baseStorageDirectory())
+                )
             )
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    try {
-                        pickStorageLocation.launch(null)
-                    } catch (e: ActivityNotFoundException) {
-                        context.toast(MR.strings.file_picker_error)
-                    }
-                },
+                onClick = { launcher.launch(null) }
             ) {
                 Text(stringResource(MR.strings.onboarding_storage_action_select))
             }
@@ -83,7 +94,7 @@ internal class StorageStep : OnboardingStep {
                     handler.openUri(
                         "https://mihon.app/docs/faq/storage#migrating-from-tachiyomi-v0-14-x-or-earlier"
                     )
-                },
+                }
             ) {
                 Text(stringResource(MR.strings.onboarding_storage_help_action))
             }
@@ -91,7 +102,7 @@ internal class StorageStep : OnboardingStep {
 
         LaunchedEffect(Unit) {
             storagePref.baseStorageDirectory().changes().collectLatest {
-                _isComplete = true
+                _isComplete = storagePref.baseStorageDirectory().isSet()
             }
         }
     }
