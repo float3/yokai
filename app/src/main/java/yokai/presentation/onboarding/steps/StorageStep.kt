@@ -102,7 +102,7 @@ internal class StorageStep : OnboardingStep {
 
         LaunchedEffect(Unit) {
             storagePref.baseStorageDirectory().changes().collectLatest {
-                _isComplete = storagePref.baseStorageDirectory().isSet()
+                _isComplete = true
             }
         }
     }
